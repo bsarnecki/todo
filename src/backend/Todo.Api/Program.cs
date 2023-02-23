@@ -1,6 +1,11 @@
 using AutoMapper;
+using Azure.Identity;
 using MediatR;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Azure;
+using Microsoft.Extensions.Options;
 using Todo.Api.Commands;
+using Todo.Api.Configuration;
 using Todo.Api.Mapping;
 using Todo.Api.Requests;
 using Todo.Api.Responses;
@@ -13,6 +18,28 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 builder.Services.AddAutoMapper(x => x.AddProfile<DefaultProfile>());
+builder.Services.Configure<TodoConfig>(
+    builder.Configuration.GetSection(nameof(TodoConfig)));
+
+builder.Services.AddAzureClients(clientBuilder =>
+{
+    clientBuilder.AddClient<CosmosClient, CosmosClientOptions>((c, t, s) =>
+    {
+        c.ApplicationName = "TodoApi";
+        c.ConnectionMode = ConnectionMode.Direct;
+        c.SerializerOptions = new CosmosSerializationOptions()
+        {
+            PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase,
+            IgnoreNullValues = true
+        };
+
+        var options = s.GetRequiredService<IOptions<TodoConfig>>();
+
+        return new CosmosClient(options.Value.CosmosEndpoint, t, c);
+    });
+
+    clientBuilder.UseCredential(new DefaultAzureCredential());
+});
 
 var app = builder.Build();
 
