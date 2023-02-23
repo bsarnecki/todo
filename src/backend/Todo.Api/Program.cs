@@ -1,9 +1,18 @@
+using AutoMapper;
+using MediatR;
+using Todo.Api.Commands;
+using Todo.Api.Mapping;
+using Todo.Api.Requests;
+using Todo.Api.Responses;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+builder.Services.AddAutoMapper(x => x.AddProfile<DefaultProfile>());
 
 var app = builder.Build();
 
@@ -16,29 +25,19 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
+app.MapPost("reminders",
+    async static (AddReminderRequest request, IMediator mediator, IMapper mapper, CancellationToken cancellationToken) =>
+        await mediator.Send(mapper.Map<AddReminderCommand>(request), cancellationToken))
+    .WithDescription("Adds new reminder for user")
+    .ProducesProblem(400)
+    .Produces(StatusCodes.Status204NoContent)
 .WithOpenApi();
 
-app.Run();
+app.MapGet("reminders",
+    async static (IMediator mediator, IMapper mapper, CancellationToken cancellationToken) =>
+        mapper.Map<GetRemindersResponse>(await mediator.Send(new GetRemindersCommand(), cancellationToken)))
+    .WithDescription("Returns reminders for user")
+    .Produces(StatusCodes.Status200OK)
+    .WithOpenApi();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.Run();
